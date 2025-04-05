@@ -203,9 +203,9 @@ Function Replace-SystemFile {
 
 
 # --- Main Script ---
-Write-Host "======================================================"
-Write-Host " Starting WinHlp32 Installation Script for Windows 11 " -ForegroundColor Yellow
-Write-Host "======================================================"
+Write-Host "=========================================================="
+Write-Host " Starting hlp4win11 installation script for Windows 11 " -ForegroundColor Yellow
+Write-Host "=========================================================="
 
 # 1. Check for Admin privileges
 Write-Host "Step 1: Checking for Administrator privileges..."
@@ -371,9 +371,10 @@ Write-Host "`nMSU file '$expectedFileName' is ready at: $Global:DownloadedMsuPat
 
 
 # 5. Installation Phase
-Write-Host "`n======================================================"
+Write-Host "`n=========================================================="
 Write-Host " Starting WinHlp32 Component Installation Phase " -ForegroundColor Yellow
-Write-Host "======================================================"
+Write-Host "=========================================================="
+
 $installationSuccess = $true # Assume success initially for this phase
 
 # Use a try/catch/finally block to ensure cleanup happens for installation steps
@@ -594,19 +595,19 @@ try {
 }
 
 
-Write-Host "`n======================================================"
+Write-Host      "=========================================================="
 # Check combined failures ($Global:FailureCount) and phase success ($installationSuccess)
 if ($Global:FailureCount -gt 0 -or -not $installationSuccess) {
      Write-Warning " WinHlp32 installation process completed with $($Global:FailureCount) error(s)."
      Write-Warning " Please review the output above for details."
-     Write-Host "======================================================"
+     Write-Host "=========================================================="
      # Optional exit with error code
      # exit 1
 } else {
      Write-Host " WinHlp32 installation completed successfully! " -ForegroundColor Green
      Write-Host " You should now be able to open .hlp files."
      Write-Host "(Note: If your system language files were not found, WinHelp UI will be in English)" -ForegroundColor Yellow
-     Write-Host "======================================================"
+     Write-Host "=========================================================="
 }
 
 # Optional pause at the end
