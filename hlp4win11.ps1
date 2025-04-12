@@ -1,8 +1,7 @@
-#Step 1: Copy this script somewhere to your root disk like c:\hlp4win11\hlp4win11.ps1 because it might not work from network drive.
-#Step 2: Open PowerShell as administrator and navigate to c:\hlp4win11 directory to execute following command.
-#Step 3: powershell.exe -ExecutionPolicy Bypass -File .\hlp4win11.ps1
-#Step 4: If everything went well, you will be able to open HLP files on your Windows 11 machine.
-#Step 5: Enjoy life! If some major Windows update overwrites legacy files then repeat steps 1-3.
+#Step 1: Copy this script somewhere to your root disk like c:\hlp4win11\hlp4win11.ps1 because it might not work from network drive if manual download is needed.
+#Step 2: Open PowerShell as administrator and navigate to c:\hlp4win11 directory to execute the following command:   powershell.exe -ExecutionPolicy Bypass -File .\hlp4win11.ps1
+#Step 3: If everything went well, you will be able to open HLP files on your Windows 11 machine.
+#Step 4: Enjoy life! If some major Windows update overwrites legacy files then repeat steps 1-3.
 
 #Requires -Version 3.0
 #Requires -RunAsAdministrator
@@ -19,7 +18,7 @@ This script automates the process of restoring WinHlp32 functionality on modern 
 2. Detects the system architecture (x64 or x86).
 3. Fetches the Microsoft Download Center details page for the corresponding KB917607 MSU.
 4. Parses the HTML to find the direct download link using regex.
-5. Downloads the correct MSU file using BITS, showing progress and waiting for completion.
+5. Downloads the correct MSU file using Invoke-WebRequest. If download fails, prompts for manual download.
 6. Expands the downloaded MSU and the CAB file within it.
 7. Extracts the necessary WinHlp32.exe, ftsrch.dll, ftlx*.dll files and their corresponding
    MUI files. It attempts to use the system's default UI language first using simple path matching.
@@ -33,11 +32,10 @@ MUST BE RUN AS ADMINISTRATOR.
 
 .NOTES
 Author: Zeljko Avramovic
-Date:   April 4th, 2025
-Version: 1.0
+Date:   April 12th, 2025
+Version: 1.1
 Requires PowerShell 3.0 or later.
 Requires Administrator privileges.
-BITS service must be running.
 Execution Policy may need adjustment (e.g., 'Set-ExecutionPolicy RemoteSigned' or run as 'powershell.exe -ExecutionPolicy Bypass -File .\hlp4win11.ps1').
 Relies on the download link being present in a specific format within the Microsoft Download Center page's static HTML.
 Website structure changes at Microsoft can break the download part of this script. If this is the case you can download file manually and rerun the script.
@@ -45,11 +43,11 @@ If your system language MUI files are not in the package, the WinHelp UI should 
 #>
 
 # --- Script Configuration ---
-$ScriptDir = $PSScriptRoot # Directory where the script resides or is running from
+$ScriptDir          = $PSScriptRoot # Directory where the script resides or is running from
 $TempExtractDirBase = "WinHlp32_Install_Temp" # Base name for temporary extraction folder
-$TempMsuDir = Join-Path -Path $ScriptDir -ChildPath "${TempExtractDirBase}_MSU"
-$TempCabDir = Join-Path -Path $TempMsuDir -ChildPath "${TempExtractDirBase}_CAB"
-$BackupExtension = "bkp" # Backup extension for original system files
+$TempMsuDir         = Join-Path -Path $ScriptDir -ChildPath "${TempExtractDirBase}_MSU"
+$TempCabDir         = Join-Path -Path $TempMsuDir -ChildPath "${TempExtractDirBase}_CAB"
+$BackupExtension    = "bkp" # Backup extension for original system files
 
 # --- URLs for the specific KB download pages ---
 $downloadInfo = @{
@@ -234,133 +232,80 @@ if ($architecture -eq 'AMD64') {
 }
 $targetDownload = $downloadInfo[$archKey]
 
-# 3. Check BITS Service
-Write-Host "`nStep 3: Checking Background Intelligent Transfer Service (BITS)..."
-$bitsService = Get-Service -Name BITS -ErrorAction SilentlyContinue
-if ($null -eq $bitsService) {
-    Write-Error "BITS service is not installed on this system. Cannot proceed with download."
-    Read-Host "Press Enter to exit"
-    Exit 1
-}
-if ($bitsService.Status -ne 'Running') {
-    Write-Warning "  BITS service is not running (Status: $($bitsService.Status)). Attempting to start..."
-    try {
-        Start-Service -Name BITS
-        Start-Sleep -Seconds 3 # Give the service a moment to start
-        $bitsService.Refresh()
-        if ($bitsService.Status -ne 'Running') {
-            Write-Error "  Failed to start BITS service. Please start it manually (services.msc) and rerun the script."
-            Read-Host "Press Enter to exit"
-            Exit 1
-        }
-        Write-Host "  BITS service started successfully." -ForegroundColor Green
-    } catch {
-        Write-Error "  Error starting BITS service: $($_.Exception.Message)"
-        Read-Host "Press Enter to exit"
-        Exit 1
-    }
-} else {
-    Write-Host "  BITS service is running." -ForegroundColor Green
-}
-
-# 4. Download Phase
-Write-Host "`nStep 4: Downloading required MSU file ($($targetDownload.Description))..."
+# 3. Download Phase
+Write-Host "`nStep 3: Downloading required MSU file ($($targetDownload.Description))..."
 $pageUrl = $targetDownload.Url
 $expectedFileName = $targetDownload.ExpectedFileName
 $htmlContent = $null
 $downloadUrl = $null
+$destinationPath = Join-Path -Path $ScriptDir -ChildPath $expectedFileName
 
-try {
-    # Fetch Download Page HTML
-    $headers = @{
-        'User-Agent' = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
-    Write-Host "  Fetching details page: $pageUrl"
-    $response = Invoke-WebRequest -Uri $pageUrl -UseBasicParsing -Headers $headers -TimeoutSec 120
-    $htmlContent = $response.Content
-    Write-Host "  HTML content fetched successfully." -ForegroundColor Green
-
-    # Extract Download URL using Regex
-    $escapedFileName = [regex]::Escape($expectedFileName)
-    $regex_directlink = "<a\s+[^>]*?href\s*=\s*['`"]([^'`"]*download\.microsoft\.com/[^'`"]*/$($escapedFileName)[^'`"]*)['`"][^>]*>"
-    if ($htmlContent -match $regex_directlink) {
-        $downloadUrl = $matches[1] -replace '&amp;', '&'
-        Write-Host "    Found potential download link." -ForegroundColor Green
-    } else {
-        Write-Error "  Could not find download link. Please manually download from:"
-        Write-Host "  $pageUrl"
-        throw "Download link not found"
-    }
-
-    $destinationPath = Join-Path -Path $ScriptDir -ChildPath $expectedFileName
-
-    # Check if BITS is available
-    $bitsService = Get-Service -Name BITS -ErrorAction SilentlyContinue
-    $bitsAvailable = $false
-    if ($bitsService -and $bitsService.Status -eq 'Running') {
-        $bitsAvailable = $true
-    } else {
-        Write-Warning "BITS service is not available or not running."
-        $bitsAvailable = $false
-    }
-
-    if ($bitsAvailable) {
-        try {
-            # Attempt BITS download
-            $job = Start-BitsTransfer -Source $downloadUrl -Destination $destinationPath -DisplayName "Downloading $expectedFileName" -Description $targetDownload.Description -Asynchronous -ErrorAction Stop
-
-            # Monitor download progress
-            while ($job.JobState -in ('Connecting', 'Transferring', 'Queued')) {
-                $percentComplete = if ($job.BytesTotal -gt 0) { [Math]::Round(($job.BytesTransferred / $job.BytesTotal) * 100) } else { 0 }
-                Write-Progress -Activity "Downloading '$expectedFileName'" -Status "$percentComplete% Complete" -PercentComplete $percentComplete
-                Start-Sleep -Seconds 1
-                $job = Get-BitsTransfer -JobId $job.JobId
-            }
-            Write-Progress -Activity "Downloading '$expectedFileName'" -Completed
-
-            if ($job.JobState -eq 'Transferred') {
-                Complete-BitsTransfer -BitsJob $job
-                $Global:DownloadedMsuPath = $destinationPath
-            } else {
-                throw "BITS download did not complete successfully. State: $($job.JobState)"
-            }
-        } catch {
-            Write-Warning "BITS download failed: $($_.Exception.Message)"
-            Write-Host "`nBITS is enabled but download failed. Probably because you put your script into network or mapped drive."
-            Write-Host "If script location is not the reason (please double check!), then you can fix this issue if:"
-			Write-Host "1.  You go to Microsoft KB917607 site:"
-            Write-Host "    $downloadUrl" -ForegroundColor Cyan
-            Write-Host "2.  Save the package as:"
-            Write-Host "    $destinationPath" -ForegroundColor Cyan
-            Write-Host "3.  Rerun this script."
-            return
+# Check if file already exists (from previous attempt or manual download)
+if (Test-Path -Path $destinationPath -PathType Leaf) {
+    Write-Host "  MSU file '$expectedFileName' already exists in script directory. Skipping download." -ForegroundColor Cyan
+    $Global:DownloadedMsuPath = $destinationPath
+} else {
+    Write-Host "  MSU file not found locally. Attempting automatic download..."
+    try {
+        # Fetch Download Page HTML
+        $headers = @{
+            'User-Agent' = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
-    } else {
-        Write-Host "`nError - You do not have BITS service enabled."
-        Write-Host "`nYou can either enable it, or download the update package for your system architecture."
-        Write-Host "`nBased on your preference choose one or the other method:`n"
-        Write-Host "1.  If you choose to manually download the package:"
-        Write-Host "    1.1.  Go to Microsoft KB917607 site:"
-        Write-Host "          $downloadUrl" -ForegroundColor Cyan
-        Write-Host "    1.2.  Save the package as:"
-        Write-Host "          $destinationPath" -ForegroundColor Cyan
-        Write-Host "    1.3.  Rerun this script."
-        Write-Host "2.  If you choose to enable BITS service:"
-        Write-Host "    2.1.  Open Services console: Press Win+R, type 'services.msc', press Enter."
-        Write-Host "    2.2.  Find 'Background Intelligent Transfer Service'."
-        Write-Host "    2.3.  Right-click, select 'Properties'."
-        Write-Host "    2.4.  Set 'Startup type' to 'Manual' or 'Automatic'."
-        Write-Host "    2.5.  Click 'Start' to run the service."
-        Write-Host "    2.6.  Close Services console and rerun this script."
-        return
+        Write-Host "  Fetching details page: $pageUrl"
+        $response = Invoke-WebRequest -Uri $pageUrl -UseBasicParsing -Headers $headers -TimeoutSec 120
+        $htmlContent = $response.Content
+        Write-Host "  HTML content fetched successfully." -ForegroundColor Green
+
+        # Extract Download URL using Regex
+        $escapedFileName = [regex]::Escape($expectedFileName)
+        # Template uses single quotes: escape literal single quotes with '', use " directly. {0} is placeholder.
+        $regex_pattern_template = '<a\s+[^>]*?href\s*=\s*[''"](?<Url>[^''"]*download\.microsoft\.com/[^''"]*/{0}[^''"]*)[''"][^>]*>'
+        $regex_directlink = $regex_pattern_template -f $escapedFileName
+        Write-Verbose "  Using Regex: $regex_directlink"
+
+        # Find the first matching line/object
+        $firstMatchInfo = $htmlContent | Select-String -Pattern $regex_directlink | Select-Object -First 1
+
+        if ($firstMatchInfo -and $firstMatchInfo.Matches[0].Groups['Url'].Success) {
+            # Extract URL from the named group of the first match on that line
+            $downloadUrl = $firstMatchInfo.Matches[0].Groups['Url'].Value -replace '&amp;', '&'
+            Write-Host "    Found download link: $downloadUrl" -ForegroundColor Green
+        } else {
+            # Handle case where pattern didn't match or capture group failed
+            Write-Error "  Could not find download link pattern, or URL capture failed. Microsoft page structure might have changed."
+            throw "Download link pattern not found or URL capture failed"
+        }
+
+        # Attempt download using Invoke-WebRequest
+        Write-Host "  Attempting download..."
+        Write-Host "    Source: $downloadUrl"
+        Write-Host "    Destination: $destinationPath"
+        # PowerShell 5+ shows progress automatically. For PS 3/4, this will just wait.
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -TimeoutSec 300 # 5 minute timeout
+        Write-Host "  Download completed successfully via Invoke-WebRequest." -ForegroundColor Green
+
+        # Assign path only AFTER successful download
+        $Global:DownloadedMsuPath = $destinationPath
+
+    } catch {
+        Write-Warning "`nAutomatic download failed: $($_.Exception.Message)"
+        Write-Host "`nCould not automatically download the required MSU file."
+        Write-Host "This might be due to network issues, Microsoft changing the download page, or other errors."
+        Write-Host "`nPlease perform the following steps:"
+        Write-Host "1. Manually download the correct package for your system:" -ForegroundColor Yellow
+        Write-Host "   Architecture: $archKey"
+        Write-Host "   Expected File: $expectedFileName"
+        Write-Host "   Download Link: $pageUrl" -ForegroundColor Cyan
+        Write-Host "   If link above is missing or broken, search Microsoft for 'KB917607 download' for Windows 8.1 ($archKey)."
+        Write-Host "2. Save the downloaded file AS '$expectedFileName' in the *same directory* as this script:" -ForegroundColor Yellow
+        Write-Host "   $ScriptDir" -ForegroundColor Cyan
+        Write-Host "3. Rerun this script." -ForegroundColor Yellow
+        Read-Host "Press Enter to exit after noting the instructions"
+        Exit 1 # Exit after providing manual instructions
     }
+} # End else block for needing download
 
-} catch {
-    Write-Error "`nAn error occurred during the download phase: $($_.Exception.Message)"
-    Exit 1
-}
-
-# Check if we have a valid MSU path before proceeding
+# Check if we have a valid MSU path before proceeding (either pre-existing or downloaded)
 if (-not $Global:DownloadedMsuPath -or -not (Test-Path -Path $Global:DownloadedMsuPath -PathType Leaf)) {
      Write-Error "`nCould not obtain the required MSU file '$expectedFileName'. Cannot proceed with installation."
      Read-Host "Press Enter to exit"
@@ -370,7 +315,7 @@ if (-not $Global:DownloadedMsuPath -or -not (Test-Path -Path $Global:DownloadedM
 Write-Host "`nMSU file '$expectedFileName' is ready at: $Global:DownloadedMsuPath" -ForegroundColor Cyan
 
 
-# 5. Installation Phase
+# 4. Installation Phase
 Write-Host "`n=========================================================="
 Write-Host " Starting WinHlp32 Component Installation Phase " -ForegroundColor Yellow
 Write-Host "=========================================================="
@@ -379,16 +324,16 @@ $installationSuccess = $true # Assume success initially for this phase
 
 # Use a try/catch/finally block to ensure cleanup happens for installation steps
 try {
-    # 5a. Clean up previous temp directories if they exist
-    Write-Host "Step 5a: Cleaning up old temporary directories (if any)..."
+    # 4a. Clean up previous temp directories if they exist
+    Write-Host "Step 4a: Cleaning up old temporary directories (if any)..."
     if (Test-Path -Path $TempMsuDir) {
         Write-Verbose "  Removing existing directory: $TempMsuDir"
         Remove-Item -Path $TempMsuDir -Recurse -Force -ErrorAction SilentlyContinue
     }
     # No need to check TempCabDir separately, it's inside TempMsuDir
 
-    # 5b. Expand MSU
-    Write-Host "Step 5b: Expanding MSU file '$($Global:DownloadedMsuPath)'..."
+    # 4b. Expand MSU
+    Write-Host "Step 4b: Expanding MSU file '$($Global:DownloadedMsuPath)'..."
     try {
         New-Item -Path $TempMsuDir -ItemType Directory -Force -ErrorAction Stop | Out-Null
         Write-Verbose "  Executing: expand.exe -F:* `"$($Global:DownloadedMsuPath)`" `"$TempMsuDir`""
@@ -401,8 +346,8 @@ try {
         throw # Stop execution here, cleanup will happen in finally
     }
 
-    # 5c. Find and Expand CAB
-    Write-Host "Step 5c: Finding and expanding relevant CAB file..."
+    # 4c. Find and Expand CAB
+    Write-Host "Step 4c: Finding and expanding relevant CAB file..."
     $cabPattern = $targetDownload.CabPattern
     Write-Verbose "  Searching for CAB file matching pattern '$cabPattern' in '$TempMsuDir'"
     $cabFileItem = Get-ChildItem -Path $TempMsuDir -Filter $cabPattern | Select-Object -First 1
@@ -425,8 +370,8 @@ try {
         throw # Stop execution
     }
 
-    # 5d. Get System Language
-    Write-Host "Step 5d: Getting default system UI language..."
+    # 4d. Get System Language
+    Write-Host "Step 4d: Getting default system UI language..."
     $muiLang = $null
     try {
         $muiLang = (Get-Culture).Name # e.g., "en-US"
@@ -444,13 +389,13 @@ try {
     }
     $fallbackMuiLang = "en-US" # Define the standard fallback
 
-    # 5e. Get Architecture from MSU filename (like original hlp.ps1)
-    Write-Host "Step 5e: Determining architecture from MSU filename..."
+    # 4e. Get Architecture from MSU filename (like original hlp.ps1)
+    Write-Host "Step 4e: Determining architecture from MSU filename..."
     $arch = if ($Global:DownloadedMsuPath -match 'x64') { "amd64" } else { "x86" }
     Write-Host "  Detected architecture string for path matching: $arch" -ForegroundColor Green
 
-    # 5f. Find Source Files (Reverted Logic + Fallback) & Define Target Paths (Reverted Paths)
-    Write-Host "Step 5f: Identifying required files and target locations (using original script logic + fallback)..."
+    # 4f. Find Source Files (Reverted Logic + Fallback) & Define Target Paths (Reverted Paths)
+    Write-Host "Step 4f: Identifying required files and target locations (using original script logic + fallback)..."
     $systemRoot = $env:SystemRoot
     $sourceFiles = @{} # Hashtable to store found source paths
     $targetPaths = @{} # Hashtable to store target paths
@@ -527,8 +472,8 @@ try {
     Write-Host "  All required source files located successfully (using fallbacks where necessary)." -ForegroundColor Green
 
 
-    # 5g. Prepare Target Directories and Replace System Files
-    Write-Host "`nStep 5g: Replacing system files (requires Administrator privileges)..."
+    # 4g. Prepare Target Directories and Replace System Files
+    Write-Host "`nStep 4g: Replacing system files (requires Administrator privileges)..."
     $currentSuccessCount = 0
     $currentFailureCount = 0
 
@@ -579,8 +524,8 @@ try {
      $installationSuccess = $false # Ensure phase is marked as failed on exceptions
      # Flow will continue to finally block
 } finally {
-    # 6. Cleanup Temporary Files (Always runs after installation attempt)
-    Write-Host "`nStep 6: Cleaning up temporary extraction directory..."
+    # 5. Cleanup Temporary Files (Always runs after installation attempt)
+    Write-Host "`nStep 5: Cleaning up temporary extraction directory..."
     if (Test-Path -Path $TempMsuDir) {
         Write-Verbose "  Removing temporary directory: $TempMsuDir"
         Remove-Item -Path $TempMsuDir -Recurse -Force -ErrorAction SilentlyContinue
