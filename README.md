@@ -29,25 +29,25 @@ Support for `.hlp` (WinHelp) files was deprecated in Windows Vista and later. Wh
 
 `hlp4win11` automates this process:
 
-- **Easy Install:** A single command downloads and runs the installer
-- Downloads the correct KB917607 update for your system (x64 or x86)
-- Extracts the necessary WinHlp32 binaries and language files
-- Backs up existing system files with sequential versioning
-- Installs the components, enabling `.hlp` file viewing on Windows 11
-- Gracefully handles BITS unavailability or download failures by providing manual download instructions
+- **Easy Install:** A single command downloads and runs the installer.
+- Downloads the correct KB917607 update for your system (x64 or x86) using `Invoke-WebRequest`.
+- Extracts the necessary WinHlp32 binaries and language files.
+- Backs up existing system files with sequential versioning.
+- Installs the components, enabling `.hlp` file viewing on Windows 11.
+- Gracefully handles download failures by providing manual download instructions.
 
 
 
 ## Features
 
-- **One-Command Install:** Uses `irm ... | iex` for quick setup
-- **Automatic architecture detection** (x64 or x86)
-- **Language-aware extraction**: uses your system UI language if available, otherwise falls back to American English (en-US)
-- **Safe file replacement**: sequential backups (`.01.bkp`, `.02.bkp`, etc.) before overwriting system files
-- **BITS download with progress** when available
-- **Manual download fallback** if BITS is disabled, unavailable, or download fails
-- **Minimal user interaction**: mostly unattended once started
-- **Cleanup of temporary files** after installation
+- **One-Command Install:** Uses `irm ... | iex` for quick setup.
+- **Automatic architecture detection** (x64 or x86).
+- **Language-aware extraction**: uses your system UI language if available, otherwise falls back to American English (en-US).
+- **Safe file replacement**: sequential backups (`.01.bkp`, `.02.bkp`, etc.) before overwriting system files.
+- **Download via Invoke-WebRequest**: Uses standard PowerShell cmdlet for downloading (shows progress automatically on PowerShell 5.0+).
+- **Manual download fallback** if automatic download fails.
+- **Minimal user interaction**: mostly unattended once started.
+- **Cleanup of temporary files** after installation.
 
 
 
@@ -56,7 +56,7 @@ Support for `.hlp` (WinHelp) files was deprecated in Windows Vista and later. Wh
 - **Windows 11** (also works on Windows 10)
 - **PowerShell 3.0 or newer**
 - **Administrator privileges** (script enforces this)
-- **Internet access** for the Quick Install or to download the update (KB917607) manually
+- **Internet access** for the Quick Install or to download the update (KB917607) manually.
 - **Execution Policy**
     - The **Quick Install** command (`irm ... | iex`) implicitly bypasses the execution policy for the initial bootstrap script download. The main script then runs with bypass automatically.
     - For the **Manual Installation** method, the Execution Policy can be either set globally beforehand (`Set-ExecutionPolicy RemoteSigned`) or bypassed temporarily when running the script (`powershell.exe -ExecutionPolicy Bypass -File .\hlp4win11.ps1`).
@@ -91,7 +91,7 @@ This is the easiest way to install `hlp4win11`, using a single command that auto
 
 5.  **Why is `run.ps1` needed:**
 
-    The `run.ps1`  script serves as a necessary bootstrap installer for the one-command Quick Install method. While `irm ... | iex` is convenient for fetching and running remote scripts, it executes them directly from memory, meaning the script has no defined file path on your disk ($PSScriptRoot is invalid). This poses a problem because the main `hlp4win11.ps1` installer relies on knowing its own directory to locate the KB917607 MSU file if you need to download it manually as a fallback (for instance, if the automatic download fails or Microsoft changes the URL). This fallback capability is essential even if setting up for a mostly **offline installation**. Therefore, `run.ps1` bridges this gap: it gets executed by `irm ... | iex`, downloads the full `hlp4win11.ps1`  script to a temporary folder on your disk, and then launches the main script *from that disk location*, ensuring it has the valid path required for its essential fallback mechanisms to function correctly.
+    The `run.ps1`  script serves as a necessary bootstrap installer for the one-command **Quick Install** method. While `irm ... | iex` is convenient for fetching and running remote scripts, it executes them directly from memory, meaning the script has no defined file path on your disk ($PSScriptRoot is invalid). This poses a problem because the main `hlp4win11.ps1` installer relies on knowing its own directory to locate the KB917607 MSU file if you need to download it manually as a fallback (for instance, if the automatic download fails or Microsoft changes the URL). This fallback capability is essential even if setting up for a mostly **offline installation**. Therefore, `run.ps1` bridges this gap: it gets executed by `irm ... | iex`, downloads the full `hlp4win11.ps1`  script to a temporary folder on your disk, and then launches the main script *from that disk location*, ensuring it has the valid path required for its essential fallback mechanisms to function correctly.
 
 
 
@@ -100,12 +100,12 @@ This is the easiest way to install `hlp4win11`, using a single command that auto
 Use this method if the Quick Install fails (e.g., due to network restrictions) or if you prefer to download the script manually. Only `hlp4win11.ps1` is needed. Script `run.ps1` is not needed for manual installation.
 
 1.  **Download the Script**:
-    
+
     *   Go to the `hlp4win11.ps1` script page: [https://github.com/zeljkoavramovic/hlp4win11/blob/main/hlp4win11.ps1](https://github.com/zeljkoavramovic/hlp4win11/blob/main/hlp4win11.ps1)
     *   Click the "Raw" button or the download button to get the script file.
     *   Save `hlp4win11.ps1` to a **local directory**, e.g., `C:\hlp4win11\hlp4win11.ps1`.
-    > **Note:** Running from a network or mapped drive may cause download issues because BITS cannot download to network locations. Always use a local NTFS drive for manual execution.
-    
+    > **Note:** While `Invoke-WebRequest` (used for downloads) can write to network drives, running the script manually from a local drive is recommended for simplicity and to ensure the manual download fallback (placing the MSU file alongside the script) works reliably without potential network permission issues.
+
 2.  **Open PowerShell as Administrator**: Search for **PowerShell**, right-click, and select **Run as administrator**.
 
 3.  **Navigate to the script directory**:
@@ -119,7 +119,7 @@ Use this method if the Quick Install fails (e.g., due to network restrictions) o
     ```
 
 5.  **If prompted to manually download the update**:
-    *   The script will provide a direct download link for the KB917607 MSU file.
+    *   The script will provide instructions and potentially a download link for the KB917607 MSU file.
     *   Download it using your browser.
     *   Save it **in the same directory as the script** (`C:\hlp4win11` in this example).
     *   Rerun the script (`powershell.exe -ExecutionPolicy Bypass -File .\hlp4win11.ps1`).
@@ -133,29 +133,19 @@ If a major Windows update overwrites the patched files, **simply rerun the Quick
 
 
 
-## Flowchart
+## How It Works
 
 ```mermaid
 flowchart TD
-    AA[Download run.ps1]
-    AA --> BB[Execute run.ps1]
+    AA[Download run.ps1] --> BB[Execute run.ps1]
     BB --> CC[Download hlp4win11.ps1 to %TEMP%]
     CC --> A[Start hlp4win11.ps1 Script]
     A --> B{Admin Privileges?}
     B -- No --> C[Exit with Error]
     B -- Yes --> D[Detect Architecture]
-    D --> E[Check BITS Service]
-    E -- Not Installed --> X[Show Manual Download Instructions] --> S[Done: User Action Needed]
-    E -- Installed --> F{BITS Running?}
-    F -- No --> G[Attempt to Start BITS]
-    G --> H{BITS Running After Start?}
-    H -- No --> X
-    H -- Yes --> I[Attempt BITS Download]
-    F -- Yes --> I
-    I --> J{BITS Download Success?}
-    J -- Yes --> K[Extract MSU and CAB]
-    J -- No --> X
-    X --> S
+    D --> I{Attempt Download via Invoke-WebRequest}
+    I -- Success --> K[Extract MSU and CAB]
+    I -- Failure --> X[Show Manual Download Instructions] --> S[Done: User Action Needed]
     K --> L[Detect System Language]
     L --> M{Language Files Found?}
     M -- Yes --> N[Use System Language Files]
@@ -172,44 +162,43 @@ flowchart TD
 
 ## Troubleshooting
 
-- **irm or iex command fails (Quick Install):**
-  - Ensure you have active internet connectivity.
-  - Check if your firewall or antivirus is blocking the connection to raw.githubusercontent.com.
-  - On older systems, you might need to enable newer TLS versions in PowerShell first: [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12. (Though the script targets Win 10/11 where this is usually fine).
-  - If the command consistently fails, use the **Manual Installation** method instead.
-- **BITS errors or download failures (during script execution):**
-  The script will provide a direct download link for the MSU file. Download it manually, place it in the same directory as hlp4win11.ps1 (for manual install) or in %TEMP%\hlp4win11 (if quick install failed mid-way and you want to retry manually from there), then rerun the script manually (powershell.exe -ExecutionPolicy Bypass -File path\to\hlp4win11.ps1).
-- **Script exits with "Must be run as Administrator":**
-  Right-click PowerShell (or Windows Terminal) and select **Run as administrator** before running the install command or script.
-- **After Windows Update, .hlp files stop working:**
-  Rerun the **Quick Install** command or the **Manual Installation** script to restore the legacy files.
-- **Language-specific UI missing:**
-  The script falls back to American English if your language MUI files are unavailable in the original KB917607 package. WinHelp should still function, but menus/dialogs will be in English.
-- **Microsoft changes download page/link structure:**
-  The script relies on parsing static HTML for the MSU download link. If Microsoft changes the page structure, automatic download might fail. The script should then provide manual download instructions. If the *manual link itself* is broken, you may need to search for KB917607 download for your architecture (x64/x86 for Windows 8.1). Place the downloaded MSU file alongside the script (manual install) or in %TEMP%\hlp4win11 and rerun manually.
-- **BITS cannot download to network drives:**
-  This is primarily relevant for the **Manual Installation**. Always run hlp4win11.ps1 from a local NTFS drive (like C:\) if running manually. The Quick Install method automatically uses the local %TEMP% directory, avoiding this issue.
+-   **`irm` or `iex` command fails (Quick Install):**
+    *   Ensure you have active internet connectivity.
+    *   Check if your firewall or antivirus is blocking the connection to `raw.githubusercontent.com`.
+    *   On older systems, you might need to enable newer TLS versions in PowerShell first: `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12`. (Though the script targets Win 10/11 where this is usually fine).
+    *   If the command consistently fails, use the **Manual Installation** method instead.
+-   **Download failures (during script execution):**
+    *   The script uses `Invoke-WebRequest` to download the MSU file. Failures can occur due to network issues, firewall blocks, temporary server problems, or changes to the Microsoft download page structure/URL.
+    *   The script will detect the failure and provide instructions to manually download the required MSU file.
+    *   Follow the instructions: download the file, save it with the correct name (`Windows8.1-KB917607-x64.msu` or `...-x86.msu`) in the same directory as `hlp4win11.ps1` (for manual install) or in `%TEMP%\hlp4win11` (if quick install failed mid-way), then rerun the script manually (`powershell.exe -ExecutionPolicy Bypass -File path\to\hlp4win11.ps1`).
+-   **Script exits with "Must be run as Administrator":**
+    Right-click PowerShell (or Windows Terminal) and select **Run as administrator** before running the install command or script.
+-   **After Windows Update, `.hlp` files stop working:**
+    Rerun the **Quick Install** command or the **Manual Installation** script to restore the legacy files.
+-   **Language-specific UI missing:**
+    The script falls back to American English if your language MUI files are unavailable in the original KB917607 package. WinHelp should still function, but menus/dialogs will be in English.
+-   **Microsoft changes download page/link structure:**
+    The script relies on parsing static HTML for the MSU download link. If Microsoft changes the page structure, automatic download might fail. The script should then provide manual download instructions. If the *manual link itself* is broken, you may need to search for `KB917607 download` for your architecture (x64/x86 for Windows 8.1). Place the downloaded MSU file alongside the script (manual install) or in `%TEMP%\hlp4win11` and rerun manually.
 
 
 
 ## License
 
-- This project is licensed under the [Mozilla Public License 2.0 (MPL-2.0)](https://www.google.com/url?sa=E&q=https%3A%2F%2Fwww.mozilla.org%2Fen-US%2FMPL%2F2.0%2F).
-- [License explained in plain English](https://www.google.com/url?sa=E&q=https%3A%2F%2Fwww.tldrlegal.com%2Flicense%2Fmozilla-public-license-2-0-mpl-2)
+-   This project is licensed under the [Mozilla Public License 2.0 (MPL-2.0)](https://www.mozilla.org/en-US/MPL/2.0/).
+-   [License explained in plain English](https://www.tldrlegal.com/license/mozilla-public-license-2-0-mpl-2)
 
 
 
 ## Credits
 
-- Inspired by various community scripts and manual guides which all stopped working after some Windows update.
+-   Inspired by various community scripts and manual guides which all stopped working after some Windows update.
+-   Microsoft for providing the original KB917607 update packages.
 
-- Microsoft for providing the original KB917607 update packages.
 
-  
 
 ## Support the Project
 
 If this project has helped you, support is most welcome:
 
-- ⭐ **Star the repository** to show your appreciation.
-- 💬 Share your feedback or success stories in the **Discussions**.
+-   ⭐ **Star the repository** to show your appreciation.
+-   💬 Share your feedback or success stories in the **Discussions**.
