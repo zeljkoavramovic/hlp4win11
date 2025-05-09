@@ -201,4 +201,4 @@ flowchart TD
 If this project has helped you, support is most welcome:
 
 -   ⭐ **Star the repository** to show your appreciation.
--   💬 Share your feedback or success stories in the **Discussions**.
+-   💬 Share your feedback or success stories in [Discussions](https://github.com/zeljkoavramovic/hlp4win11/discussions).
