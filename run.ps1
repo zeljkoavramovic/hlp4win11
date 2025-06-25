@@ -1,5 +1,5 @@
 # This script should be called remotely using:
-# https://github.com/zeljkoavramovic/hlp4win11/blob/main/run.ps1
+# irm https://raw.githubusercontent.com/zeljkoavramovic/hlp4win11/main/run.ps1 | iex
 #
 # This command fetches the run.ps1 bootstrap script from the internet and executes it directly in memory.
 # The bootstrap script then downloads the main hlp4win11.ps1 installer script into the user's %TEMP% directory
