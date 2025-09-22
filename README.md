@@ -202,3 +202,9 @@ If this project has helped you, support is most welcome:
 
 -   ⭐ **Star the repository** to show your appreciation.
 -   💬 Share your feedback or success stories in [Discussions](https://github.com/zeljkoavramovic/hlp4win11/discussions/1).
+
+
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=zeljkoavramovic/hlp4win11&type=Date)](https://www.star-history.com/#zeljkoavramovic/hlp4win11&Date)
