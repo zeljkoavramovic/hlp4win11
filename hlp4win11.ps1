@@ -372,10 +372,10 @@ try {
     Write-Host "Step 4d: Getting default system UI language..."
     $muiLang = $null
     try {
-        $muiLang = (Get-Culture).Name # e.g., "en-US"
-        Write-Host "  Detected system language (from Get-Culture): $muiLang" -ForegroundColor Green
+        $muiLang = (Get-UICulture).Name # e.g., "en-US"
+        Write-Host "  Detected system language (from Get-UICulture): $muiLang" -ForegroundColor Green
     } catch {
-        Write-Warning "  Get-Culture failed. Error: $($_.Exception.Message)."
+        Write-Warning "  Get-UICulture failed. Error: $($_.Exception.Message)."
         try {
              $muiLang = (Get-WinSystemLocale).Name # Try original method as fallback
              Write-Host "  Detected system language (from Get-WinSystemLocale): $muiLang" -ForegroundColor Green
