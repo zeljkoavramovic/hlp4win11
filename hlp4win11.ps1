@@ -51,11 +51,11 @@ $BackupExtension    = "bkp" # Backup extension for original system files
 
 # --- URLs for the specific KB download pages ---
 $downloadInfo = @{
-    "" = @{
+    "x64" = @{
         Url              = "https://www.microsoft.com/en-us/download/details.aspx?id=47671"
         Description      = "KB917607  (Win 8.1)"
-        ExpectedFileName = "Windows8.1-KB917607-.msu"
-        CabPattern       = "Windows8.1-KB917607-*.cab" # Pattern to find the CAB inside MSU
+        ExpectedFileName = "Windows8.1-KB917607-x64.msu"
+        CabPattern       = "Windows8.1-KB917607-x64*.cab" # Pattern to find the CAB inside MSU
     }
     "x86" = @{
         Url              = "https://www.microsoft.com/en-us/download/details.aspx?id=47667"
