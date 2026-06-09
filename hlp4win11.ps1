@@ -51,11 +51,11 @@ $BackupExtension    = "bkp" # Backup extension for original system files
 
 # --- URLs for the specific KB download pages ---
 $downloadInfo = @{
-    "x64" = @{
+    "" = @{
         Url              = "https://www.microsoft.com/en-us/download/details.aspx?id=47671"
-        Description      = "KB917607 x64 (Win 8.1)"
-        ExpectedFileName = "Windows8.1-KB917607-x64.msu"
-        CabPattern       = "Windows8.1-KB917607-x64*.cab" # Pattern to find the CAB inside MSU
+        Description      = "KB917607  (Win 8.1)"
+        ExpectedFileName = "Windows8.1-KB917607-.msu"
+        CabPattern       = "Windows8.1-KB917607-*.cab" # Pattern to find the CAB inside MSU
     }
     "x86" = @{
         Url              = "https://www.microsoft.com/en-us/download/details.aspx?id=47667"
@@ -225,6 +225,9 @@ if ($architecture -eq 'AMD64') {
 } elseif ($architecture -eq 'x86') {
     $archKey = 'x86'
     Write-Host "  Detected architecture: x86" -ForegroundColor Green
+} elseif ($architecture -eq 'ARM64' {
+   $archKey = 'x64'
+   Write-Host "  Detected architecture: ARM64 - Falling to x64 binaries." -ForegroundColor Green
 } else {
     Write-Error "Unsupported architecture detected: $architecture"
     Read-Host   "Press Enter to exit"
