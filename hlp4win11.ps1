@@ -225,7 +225,7 @@ if ($architecture -eq 'AMD64') {
 } elseif ($architecture -eq 'x86') {
     $archKey = 'x86'
     Write-Host "  Detected architecture: x86" -ForegroundColor Green
-} elseif ($architecture -eq 'ARM64' {
+} elseif ($architecture -eq 'ARM64') {
    $archKey = 'x64'
    Write-Host "  Detected architecture: ARM64 - Falling to x64 binaries." -ForegroundColor Green
 } else {
