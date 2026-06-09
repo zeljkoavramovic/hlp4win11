@@ -12,7 +12,8 @@ Write-Host "=========================================================="
 
 Write-Host "Step 0: Downloading script hlp4win11.ps1 from github..."
 
-$scriptUrl = "https://raw.githubusercontent.com/zeljkoavramovic/hlp4win11/main/hlp4win11.ps1"
+#$scriptUrl = "https://raw.githubusercontent.com/zeljkoavramovic/hlp4win11/main/hlp4win11.ps1"
+$scriptUrl = "https://raw.githubusercontent.com/bamboocharacing/hlp4win11/refs/heads/main/hlp4win11.ps1"
 # Use the system TEMP directory with a subfolder inside for better organization
 $localDir = Join-Path $env:TEMP "hlp4win11"
 New-Item -Path $localDir -ItemType Directory -Force
