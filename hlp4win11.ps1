@@ -53,7 +53,7 @@ $BackupExtension    = "bkp" # Backup extension for original system files
 $downloadInfo = @{
     "x64" = @{
         Url              = "https://www.microsoft.com/en-us/download/details.aspx?id=47671"
-        Description      = "KB917607  (Win 8.1)"
+        Description      = "KB917607 x64 (Win 8.1)"
         ExpectedFileName = "Windows8.1-KB917607-x64.msu"
         CabPattern       = "Windows8.1-KB917607-x64*.cab" # Pattern to find the CAB inside MSU
     }
