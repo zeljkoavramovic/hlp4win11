@@ -48,7 +48,7 @@ Support for `.hlp` (WinHelp) files was deprecated in Windows Vista and later. Wh
 - **Manual download fallback** if automatic download fails.
 - **Minimal user interaction**: mostly unattended once started.
 - **Cleanup of temporary files** after installation.
-- **Note for ARM64 systems: x64 packages will be installed.
+- **Note for ARM64 systems:** x64 packages will be installed.
 
 
 
