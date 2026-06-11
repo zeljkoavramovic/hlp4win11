@@ -41,13 +41,14 @@ Support for `.hlp` (WinHelp) files was deprecated in Windows Vista and later. Wh
 ## Features
 
 - **One-Command Install:** Uses `irm ... | iex` for quick setup.
-- **Automatic architecture detection** (x64 or x86).
+- **Automatic architecture detection** (x64, x86 or ARM64).
 - **Language-aware extraction**: uses your system UI language if available, otherwise falls back to American English (en-US).
 - **Safe file replacement**: sequential backups (`.01.bkp`, `.02.bkp`, etc.) before overwriting system files.
 - **Download via Invoke-WebRequest**: Uses standard PowerShell cmdlet for downloading (shows progress automatically on PowerShell 5.0+).
 - **Manual download fallback** if automatic download fails.
 - **Minimal user interaction**: mostly unattended once started.
 - **Cleanup of temporary files** after installation.
+- **Note for ARM64 systems:** x64 packages will be installed.
 
 
 
