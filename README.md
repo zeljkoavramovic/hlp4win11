@@ -197,7 +197,7 @@ flowchart TD
 
 -   Inspired by various community scripts and manual guides which all stopped working after some Windows update.
 -   Microsoft for providing the original KB917607 update packages.
--   Contributions and suggestions by @seritools, @bamboocharacing, @gparyani, and @melerix.
+-   Contributions and suggestions by [@seritools](https://github.com/seritools), [@bamboocharacing](https://github.com/bamboocharacing), [@gparyani](https://github.com/gparyani), and [@melerix](https://github.com/MELERIX).
 
 
 
