@@ -18,7 +18,9 @@ This script automates the process of restoring WinHlp32 functionality on modern 
 2. Detects the system architecture (x64 or x86).
 3. Fetches the Microsoft Download Center details page for the corresponding KB917607 MSU.
 4. Parses the HTML to find the direct download link using regex.
-5. Downloads the correct MSU file using Invoke-WebRequest. If download fails, prompts for manual download.
+5. Downloads the correct MSU file using Invoke-WebRequest. If the Microsoft download fails
+   (e.g., HTTP 4xx/5xx errors), falls back to the Internet Archive (Wayback Machine) as a
+   last resort before prompting for manual download.
 6. Expands the downloaded MSU and the CAB file within it.
 7. Extracts the necessary WinHlp32.exe, ftsrch.dll, ftlx*.dll files and their corresponding
    MUI files. It attempts to use the system's default UI language first using simple path matching.
@@ -32,13 +34,14 @@ MUST BE RUN AS ADMINISTRATOR.
 
 .NOTES
 Author: Zeljko Avramovic
-Date:   April 12th, 2025
-Version: 1.1
+Date:   June 12th, 2026
+Version: 1.3
 Requires PowerShell 3.0 or later.
 Requires Administrator privileges.
 Execution Policy may need adjustment (e.g., 'Set-ExecutionPolicy RemoteSigned' or run as 'powershell.exe -ExecutionPolicy Bypass -File .\hlp4win11.ps1').
 Relies on the download link being present in a specific format within the Microsoft Download Center page's static HTML.
-Website structure changes at Microsoft can break the download part of this script. If this is the case you can download file manually and rerun the script.
+Website structure changes at Microsoft can break the download part of this script. If this is the case the script will
+attempt to download from the Internet Archive (Wayback Machine). If that also fails, you can download file manually and rerun the script.
 If your system language MUI files are not in the package, the WinHelp UI should appear in American English.
 #>
 
@@ -53,12 +56,14 @@ $BackupExtension    = "bkp" # Backup extension for original system files
 $downloadInfo = @{
     "x64" = @{
         Url              = "https://www.microsoft.com/en-us/download/details.aspx?id=47671"
+        WaybackUrl       = "https://web.archive.org/web/20260422085545id_/https://download.microsoft.com/download/a/5/6/a5651a53-2487-43c6-835a-744eb9c72579/Windows8.1-KB917607-x64.msu"
         Description      = "KB917607 x64 (Win 8.1)"
         ExpectedFileName = "Windows8.1-KB917607-x64.msu"
         CabPattern       = "Windows8.1-KB917607-x64*.cab" # Pattern to find the CAB inside MSU
     }
     "x86" = @{
         Url              = "https://www.microsoft.com/en-us/download/details.aspx?id=47667"
+        WaybackUrl       = "https://web.archive.org/web/20250904161703id_/https://download.microsoft.com/download/3/8/c/38c68f7c-1769-4089-bf21-3f5d8a556cbc/Windows8.1-KB917607-x86.msu"
         Description      = "KB917607 x86 (Win 8.1)"
         ExpectedFileName = "Windows8.1-KB917607-x86.msu"
         CabPattern       = "Windows8.1-KB917607-x86*.cab" # Pattern to find the CAB inside MSU
@@ -249,48 +254,87 @@ if (Test-Path -Path $destinationPath -PathType Leaf) {
     $Global:DownloadedMsuPath = $destinationPath
 } else {
     Write-Host "  MSU file not found locally. Attempting automatic download..."
-    try {
-        # Fetch Download Page HTML
-        $headers = @{'User-Agent' = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        Write-Host "  Fetching details page: $pageUrl"
-        $response = Invoke-WebRequest -Uri $pageUrl -UseBasicParsing -Headers $headers -TimeoutSec 120
-        $htmlContent = $response.Content
-        Write-Host "  HTML content fetched successfully." -ForegroundColor Green
 
-        # Extract Download URL using Regex
-        $escapedFileName        = [regex]::Escape($expectedFileName)
-        # Template uses single quotes: escape literal single quotes with '', use " directly. {0} is placeholder.
-        $regex_pattern_template = '<a\s+[^>]*?href\s*=\s*[''"](?<Url>[^''"]*download\.microsoft\.com/[^''"]*/{0}[^''"]*)[''"][^>]*>'
-        $regex_directlink       = $regex_pattern_template -f $escapedFileName
-        Write-Verbose "  Using Regex: $regex_directlink"
+    # Attempt sources in order: Microsoft Download Center, then Wayback Machine fallback
+    # DirectDownload = true means the URL points directly to the file (skip page fetch+parse)
+    $downloadSources = @(
+        @{ Name = "Microsoft Download Center"; Url = $pageUrl; DirectDownload = $false },
+        @{ Name = "Internet Archive (Wayback Machine)"; Url = $targetDownload.WaybackUrl; DirectDownload = $true }
+    )
 
-        # Find the first matching line/object
-        $firstMatchInfo = $htmlContent | Select-String -Pattern $regex_directlink | Select-Object -First 1
+    $downloadSucceeded = $false
+    foreach ($source in $downloadSources) {
+        $sourceName = $source.Name
+        $sourceUrl  = $source.Url
+        try {
+            Write-Host "  Attempting download from: $sourceName"
+            $headers = @{'User-Agent' = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
-        if ($firstMatchInfo -and $firstMatchInfo.Matches[0].Groups['Url'].Success) {
-            # Extract URL from the named group of the first match on that line
-            $downloadUrl = $firstMatchInfo.Matches[0].Groups['Url'].Value -replace '&amp;', '&'
-            Write-Host "    Found download link: $downloadUrl" -ForegroundColor Green
-        } else {
-            # Handle case where pattern didn't match or capture group failed
-            Write-Error "  Could not find download link pattern, or URL capture failed. Microsoft page structure might have changed."
-            throw       "Download link pattern not found or URL capture failed"
+            if ($source.DirectDownload) {
+                # Direct file download — URL points to the MSU file itself
+                $downloadUrl = $sourceUrl
+                Write-Host "  Direct download URL: $downloadUrl"
+            } else {
+                # Page-based download — fetch details page, parse HTML for download link
+                Write-Host "  Fetching details page: $sourceUrl"
+                $response = Invoke-WebRequest -Uri $sourceUrl -UseBasicParsing -Headers $headers -TimeoutSec 120
+                $htmlContent = $response.Content
+                Write-Host "  HTML content fetched successfully." -ForegroundColor Green
+
+                # Extract Download URL using Regex
+                $escapedFileName        = [regex]::Escape($expectedFileName)
+                # Template uses single quotes: escape literal single quotes with '', use " directly. {0} is placeholder.
+                $regex_pattern_template = '<a\s+[^>]*?href\s*=\s*[''"](?<Url>[^''"]*download\.microsoft\.com/[^''"]*/{0}[^''"]*)[''"][^>]*>'
+                $regex_directlink       = $regex_pattern_template -f $escapedFileName
+                Write-Verbose "  Using Regex: $regex_directlink"
+
+                # Find the first matching line/object
+                $firstMatchInfo = $htmlContent | Select-String -Pattern $regex_directlink | Select-Object -First 1
+
+                if ($firstMatchInfo -and $firstMatchInfo.Matches[0].Groups['Url'].Success) {
+                    # Extract URL from the named group of the first match on that line
+                    $downloadUrl = $firstMatchInfo.Matches[0].Groups['Url'].Value -replace '&amp;', '&'
+                    Write-Host "    Found download link: $downloadUrl" -ForegroundColor Green
+                } else {
+                    # Handle case where pattern didn't match or capture group failed
+                    Write-Error "  Could not find download link pattern, or URL capture failed from $sourceName."
+                    throw       "Download link pattern not found or URL capture failed"
+                }
+            }
+
+            # Attempt download using Invoke-WebRequest
+            Write-Host "  Attempting download..."
+            Write-Host "    Source: $downloadUrl"
+            Write-Host "    Destination: $destinationPath"
+            # PowerShell 5+ shows progress automatically. For PS 3/4, this will just wait.
+            # Pass User-Agent header for better compatibility with Wayback Machine and other CDNs
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -Headers $headers -TimeoutSec 300 # 5 minute timeout
+
+            # Validate downloaded file size (MSU files are ~700KB+; anything tiny is likely an HTML error page)
+            $downloadedSize = (Get-Item -Path $destinationPath).Length
+            if ($downloadedSize -lt 512000) {
+                Write-Warning "  Downloaded file is only $downloadedSize bytes (expected ~700KB+). File is likely corrupt or an error page."
+                Remove-Item -Path $destinationPath -Force -ErrorAction SilentlyContinue
+                throw "Downloaded file too small ($downloadedSize bytes). Likely corrupt or not the actual MSU file."
+            }
+
+            Write-Host "  Download completed successfully from $sourceName ($downloadedSize bytes)." -ForegroundColor Green
+
+            # Assign path only AFTER successful download
+            $Global:DownloadedMsuPath = $destinationPath
+            $downloadSucceeded = $true
+            break # Exit the foreach loop on success
+
+        } catch {
+            Write-Warning "`nDownload from $sourceName failed: $($_.Exception.Message)"
+            if ($source -ne $downloadSources[-1]) {
+                Write-Host "  Will try the next download source..." -ForegroundColor Yellow
+            }
         }
+    } # End foreach download source
 
-        # Attempt download using Invoke-WebRequest
-        Write-Host "  Attempting download..."
-        Write-Host "    Source: $downloadUrl"
-        Write-Host "    Destination: $destinationPath"
-        # PowerShell 5+ shows progress automatically. For PS 3/4, this will just wait.
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -TimeoutSec 300 # 5 minute timeout
-        Write-Host "  Download completed successfully via Invoke-WebRequest." -ForegroundColor Green
-
-        # Assign path only AFTER successful download
-        $Global:DownloadedMsuPath = $destinationPath
-
-    } catch {
-        Write-Warning "`nAutomatic download failed: $($_.Exception.Message)"
-        Write-Host    "`nCould not automatically download the required MSU file."
+    if (-not $downloadSucceeded) {
+        Write-Host    "`nCould not automatically download the required MSU file from any source."
         Write-Host    "This might be due to network issues, Microsoft changing the download page, or other errors."
         Write-Host    "`nPlease perform the following steps:"
         Write-Host    "1. Manually download the correct package for your system:" -ForegroundColor Yellow

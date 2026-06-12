@@ -30,7 +30,7 @@ Support for `.hlp` (WinHelp) files was deprecated in Windows Vista and later. Wh
 `hlp4win11` automates this process:
 
 - **Easy Install:** A single command downloads and runs the installer.
-- Downloads the correct KB917607 update for your system (x64 or x86) using `Invoke-WebRequest`.
+- Downloads the correct KB917607 update for your system (x64 or x86) using `Invoke-WebRequest`, with automatic fallback to the Internet Archive (Wayback Machine) if the Microsoft download is unavailable.
 - Extracts the necessary WinHlp32 binaries and language files.
 - Backs up existing system files with sequential versioning.
 - Installs the components, enabling `.hlp` file viewing on Windows 11.
@@ -45,7 +45,8 @@ Support for `.hlp` (WinHelp) files was deprecated in Windows Vista and later. Wh
 - **Language-aware extraction**: uses your system UI language if available, otherwise falls back to American English (en-US).
 - **Safe file replacement**: sequential backups (`.01.bkp`, `.02.bkp`, etc.) before overwriting system files.
 - **Download via Invoke-WebRequest**: Uses standard PowerShell cmdlet for downloading (shows progress automatically on PowerShell 5.0+).
-- **Manual download fallback** if automatic download fails.
+- **Wayback Machine fallback**: if the Microsoft download fails (HTTP 4xx/5xx), automatically retries from the Internet Archive (Wayback Machine).
+- **Manual download fallback** if all automatic sources fail.
 - **Minimal user interaction**: mostly unattended once started.
 - **Cleanup of temporary files** after installation.
 - **Note for ARM64 systems:** x64 packages will be installed.
@@ -146,7 +147,9 @@ flowchart TD
     B -- Yes --> D[Detect Architecture]
     D --> I{Attempt Download via Invoke-WebRequest}
     I -- Success --> K[Extract MSU and CAB]
-    I -- Failure --> X[Show Manual Download Instructions] --> S[Done: User Action Needed]
+    I -- Failure --> W{Wayback Machine Fallback?}
+    W -- Success --> K
+    W -- Failure --> X[Show Manual Download Instructions] --> S[Done: User Action Needed]
     K --> L[Detect System Language]
     L --> M{Language Files Found?}
     M -- Yes --> N[Use System Language Files]
@@ -179,7 +182,7 @@ flowchart TD
 -   **Language-specific UI missing:**
     The script falls back to American English if your language MUI files are unavailable in the original KB917607 package. WinHelp should still function, but menus/dialogs will be in English.
 -   **Microsoft changes download page/link structure:**
-    The script relies on parsing static HTML for the MSU download link. If Microsoft changes the page structure, automatic download might fail. The script should then provide manual download instructions. If the *manual link itself* is broken, you may need to search for `KB917607 download` for your architecture (x64/x86 for Windows 8.1). Place the downloaded MSU file alongside the script (manual install) or in `%TEMP%\hlp4win11` and rerun manually.
+    The script relies on parsing static HTML for the MSU download link. If Microsoft changes the page structure or the download becomes unavailable (HTTP 4xx/5xx errors), the script will automatically attempt to download from the Internet Archive (Wayback Machine). If that also fails, you will be prompted with manual download instructions. You may need to search for `KB917607 download` for your architecture (x64/x86 for Windows 8.1). Place the downloaded MSU file alongside the script (manual install) or in `%TEMP%\hlp4win11` and rerun manually.
 
 
 
@@ -194,6 +197,7 @@ flowchart TD
 
 -   Inspired by various community scripts and manual guides which all stopped working after some Windows update.
 -   Microsoft for providing the original KB917607 update packages.
+-   Contributions and suggestions by @seritools, @bamboocharacing, @gparyani, and @melerix.
 
 
 
